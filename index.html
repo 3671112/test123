@@ -307,15 +307,25 @@
             <p>输入BIN号码，快速查询银行信息</p>
         </div>
         
-        <div class="content">
+            <div class="content">
             <div class="input-section">
                 <label class="input-label" for="binInput">BIN号码</label>
                 <input type="text" id="binInput" class="input-field" placeholder="请输入6-19位银行卡号或BIN号码">
             </div>
             
+            <div style="background: #f2f2f7; border-radius: 16px; padding: 16px; margin-bottom: 24px; border: 2px solid #e5e5ea;">
+                <div style="color: #1d1d1f; font-size: 14px; line-height: 1.4;">
+                    <strong>💡 网络问题解决方案：</strong><br>
+                    • 如遇"网络错误"，请尝试开启代理模式<br>
+                    • 代理模式可解决CORS跨域访问问题<br>
+                    • 确保网络连接正常且API Key有效
+                </div>
+            </div>
+            
             <div class="button-group">
                 <button class="btn btn-primary" id="searchBtn" onclick="queryBinInfo()">🔍 查询银行信息</button>
                 <button class="btn btn-secondary" onclick="showApiConfig()">⚙️ 配置API Key</button>
+                <button class="btn btn-secondary" onclick="toggleProxyMode()" id="proxyBtn" style="font-size: 14px; padding: 14px;">🌐 代理模式：开启</button>
             </div>
             
             <div class="loading" id="loading">正在查询中...</div>
@@ -347,10 +357,13 @@
         // 全局变量
         window.currentCardNumber = null;
         
-        // API配置
+        // API配置 - 使用CORS代理解决跨域问题
         const API_CONFIG = {
-            url: 'http://bineagle.com/check_bin',
-            apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a'
+            // 方法1: 使用allorigins代理
+            url: 'https://api.allorigins.win/get?url=',
+            baseApiUrl: 'http://bineagle.com/check_bin',
+            apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a',
+            useProxy: true
         };
         
         // Luhn算法校验
@@ -529,21 +542,53 @@
             loadingDiv.style.display = 'block';
             
             try {
-                const apiUrl = `${API_CONFIG.url}?bin=${bin}`;
+                let apiUrl, requestOptions;
                 
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'api-key': API_CONFIG.apiKey
-                    }
-                });
+                if (API_CONFIG.useProxy) {
+                    // 使用CORS代理方式 - 将API key作为URL参数传递
+                    const targetUrl = `${API_CONFIG.baseApiUrl}?bin=${bin}&api_key=${API_CONFIG.apiKey}`;
+                    apiUrl = `${API_CONFIG.url}${encodeURIComponent(targetUrl)}`;
+                    
+                    requestOptions = {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    };
+                } else {
+                    // 直接请求方式 - 使用请求头传递API key
+                    apiUrl = `${API_CONFIG.baseApiUrl}?bin=${bin}`;
+                    requestOptions = {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'api-key': API_CONFIG.apiKey
+                        }
+                    };
+                }
+                
+                console.log('请求URL:', apiUrl);
+                
+                const response = await fetch(apiUrl, requestOptions);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
                 }
                 
-                const data = await response.json();
+                let data;
+                if (API_CONFIG.useProxy) {
+                    // 代理返回的数据格式
+                    const proxyData = await response.json();
+                    if (proxyData.contents) {
+                        data = JSON.parse(proxyData.contents);
+                    } else {
+                        throw new Error('代理服务返回数据异常');
+                    }
+                } else {
+                    data = await response.json();
+                }
+                
+                console.log('API返回数据:', data);
                 
                 if (data.code === "0000" && data.data) {
                     const resultData = {
@@ -572,11 +617,27 @@
                 }
                 
             } catch (error) {
-                const errorData = {
-                    cardType: "网络错误",
-                    issuerName: "无法连接到服务器"
-                };
-                displayResult(errorData, window.currentCardNumber);
+                console.error('API请求失败:', error);
+                
+                // 如果代理失败，尝试切换到直接请求
+                if (API_CONFIG.useProxy && error.message.includes('代理')) {
+                    showWarning(
+                        `⚠️ 代理服务异常，是否尝试直接连接？\n\n注意：直接连接可能因CORS限制而失败`, 
+                        true, 
+                        () => {
+                            API_CONFIG.useProxy = false;
+                            performBinQuery(bin);
+                        }
+                    );
+                } else {
+                    const errorData = {
+                        cardType: "网络错误",
+                        issuerName: error.message.includes('CORS') ? 
+                            "跨域请求被阻止" : "无法连接到服务器"
+                    };
+                    displayResult(errorData, window.currentCardNumber);
+                }
+                
             } finally {
                 searchBtn.disabled = false;
                 loadingDiv.style.display = 'none';
@@ -625,6 +686,20 @@
             API_CONFIG.apiKey = newApiKey;
             hideApiConfig();
             showSuccess(`✅ API Key已更新成功！`);
+        }
+        
+        // 切换代理模式
+        function toggleProxyMode() {
+            API_CONFIG.useProxy = !API_CONFIG.useProxy;
+            const proxyBtn = document.getElementById('proxyBtn');
+            
+            if (API_CONFIG.useProxy) {
+                proxyBtn.textContent = '🌐 代理模式：开启';
+                showSuccess('✅ 已开启代理模式\n通过第三方代理服务访问API，解决跨域问题');
+            } else {
+                proxyBtn.textContent = '🌐 代理模式：关闭';
+                showWarning('⚠️ 已关闭代理模式\n直接访问API，可能遇到CORS跨域限制');
+            }
         }
     </script>
 </body>
