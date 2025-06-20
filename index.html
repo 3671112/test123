@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>银行识别码查询</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 32px;
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 40px 24px 32px;
+            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header p {
+            font-size: 16px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .content {
+            padding: 32px 24px;
+            background: #ffffff;
+        }
+        
+        .input-section {
+            margin-bottom: 32px;
+        }
+        
+        .input-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 16px;
+            display: block;
+        }
+        
+        .input-field {
+            width: 100%;
+            padding: 18px 20px;
+            border: none;
+            border-radius: 20px;
+            font-size: 17px;
+            font-weight: 500;
+            background: #f2f2f7;
+            border: 2px solid #e5e5ea;
+            color: #1d1d1f;
+            transition: all 0.3s ease;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            background: #ffffff;
+            border: 2px solid #007AFF;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+        
+        .input-field::placeholder {
+            color: #8e8e93;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 18px 24px;
+            border: none;
+            border-radius: 20px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #0056CC 0%, #4A4AE6 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 122, 255, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f2f2f7;
+            color: #1d1d1f;
+            border: 2px solid #e5e5ea;
+        }
+        
+        .btn-secondary:hover {
+            background: #e5e5ea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .message {
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            display: none;
+            line-height: 1.5;
+            font-weight: 500;
+        }
+        
+        .success-message {
+            background: rgba(52, 199, 89, 0.1);
+            border: 2px solid rgba(52, 199, 89, 0.3);
+            color: #1d7324;
+        }
+        
+        .warning-message {
+            background: rgba(255, 204, 0, 0.1);
+            border: 2px solid rgba(255, 204, 0, 0.3);
+            color: #b25000;
+        }
+        
+        .error-message {
+            background: rgba(255, 69, 58, 0.1);
+            border: 2px solid rgba(255, 69, 58, 0.3);
+            color: #d70015;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #8e8e93;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e5e5ea;
+            border-radius: 50%;
+            border-top-color: #007AFF;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .result-container {
+            display: none;
+            margin-top: 24px;
+            background: #f2f2f7;
+            border-radius: 20px;
+            border: 2px solid #e5e5ea;
+            overflow: hidden;
+        }
+        
+        .result-header {
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+        }
+        
+        .result-header h2 {
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .result-header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+        }
+        
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid #e5e5ea;
+            background: #ffffff;
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .result-label {
+            font-weight: 600;
+            color: #1d1d1f;
+            font-size: 16px;
+        }
+        
+        .result-value {
+            font-weight: 500;
+            color: #1d1d1f;
+            text-align: right;
+            font-size: 16px;
+        }
+        
+        .api-config {
+            display: none;
+            background: #f2f2f7;
+            border-radius: 20px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 2px solid #e5e5ea;
+        }
+        
+        .api-config h3 {
+            color: #1d1d1f;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        
+        .api-config input {
+            width: 100%;
+            padding: 16px 20px;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            background: #ffffff;
+            border: 2px solid #e5e5ea;
+            color: #1d1d1f;
+            margin-bottom: 20px;
+        }
+        
+        .api-config input:focus {
+            outline: none;
+            background: #ffffff;
+            border: 2px solid #007AFF;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+        
+        .api-config input::placeholder {
+            color: #8e8e93;
+        }
+        
+        .config-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .config-buttons .btn {
+            flex: 1;
+            padding: 16px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏦 银行识别码查询</h1>
+            <p>输入BIN号码，快速查询银行信息</p>
+        </div>
+        
+        <div class="content">
+            <div class="input-section">
+                <label class="input-label" for="binInput">BIN号码</label>
+                <input type="text" id="binInput" class="input-field" placeholder="请输入6-19位银行卡号或BIN号码">
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" id="searchBtn" onclick="queryBinInfo()">🔍 查询银行信息</button>
+                <button class="btn btn-secondary" onclick="showApiConfig()">⚙️ 配置API Key</button>
+            </div>
+            
+            <div class="loading" id="loading">正在查询中...</div>
+            
+            <div class="message success-message" id="successMessage"></div>
+            <div class="message warning-message" id="warningMessage"></div>
+            <div class="message error-message" id="errorMessage"></div>
+            
+            <div class="api-config" id="apiConfig">
+                <h3>🔑 API Key 配置</h3>
+                <input type="text" id="newApiKey" placeholder="请输入您的BinEagle API Key">
+                <div class="config-buttons">
+                    <button class="btn btn-primary" onclick="updateApiKey()">保存</button>
+                    <button class="btn btn-secondary" onclick="hideApiConfig()">取消</button>
+                </div>
+            </div>
+            
+            <div class="result-container" id="resultContainer">
+                <div class="result-header">
+                    <h2>🎯 查询结果</h2>
+                    <p>包含Luhn校验、卡类型、发卡行名称</p>
+                </div>
+                <div id="resultGrid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        window.currentCardNumber = null;
+        
+        // API配置
+        const API_CONFIG = {
+            url: 'http://bineagle.com/check_bin',
+            apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a'
+        };
+        
+        // Luhn算法校验
+        function luhnChecksum(cardNumber) {
+            const digits = cardNumber.toString().split('').map(d => parseInt(d, 10));
+            let checksum = 0;
+            let isEven = false;
+            
+            for (let i = digits.length - 1; i >= 0; i--) {
+                let digit = digits[i];
+                
+                if (isEven) {
+                    digit *= 2;
+                    if (digit > 9) {
+                        digit = Math.floor(digit / 10) + (digit % 10);
+                    }
+                }
+                
+                checksum += digit;
+                isEven = !isEven;
+            }
+            
+            return checksum % 10;
+        }
+        
+        function validateCard(cardNumber) {
+            const cleanNumber = cardNumber.replace(/\D/g, '');
+            
+            if (cleanNumber.length < 6 || cleanNumber.length > 19) {
+                return false;
+            }
+            
+            return luhnChecksum(cleanNumber) === 0;
+        }
+        
+        // UI控制函数
+        function hideAllMessages() {
+            document.getElementById('successMessage').style.display = 'none';
+            document.getElementById('warningMessage').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('resultContainer').style.display = 'none';
+            document.getElementById('apiConfig').style.display = 'none';
+        }
+        
+        function showSuccess(message) {
+            hideAllMessages();
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+        
+        function showWarning(message, showButtons = false, onConfirm = null) {
+            hideAllMessages();
+            const warningDiv = document.getElementById('warningMessage');
+            
+            if (showButtons) {
+                warningDiv.innerHTML = `
+                    <div style="margin-bottom: 20px;">${message}</div>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-primary" onclick="confirmContinue()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%); color: #ffffff; border: none; border-radius: 12px; font-weight: 600;">继续查询</button>
+                        <button class="btn btn-secondary" onclick="cancelQuery()" style="flex: 1; padding: 12px; background: #f2f2f7; color: #1d1d1f; border: 2px solid #e5e5ea; border-radius: 12px; font-weight: 600;">取消</button>
+                    </div>
+                `;
+                window.pendingConfirmAction = onConfirm;
+            } else {
+                warningDiv.textContent = message;
+            }
+            
+            warningDiv.style.display = 'block';
+        }
+        
+        function showError(message) {
+            hideAllMessages();
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function displayResult(data, cardNumber) {
+            hideAllMessages();
+            
+            const resultGrid = document.getElementById('resultGrid');
+            const resultContainer = document.getElementById('resultContainer');
+            
+            resultGrid.innerHTML = '';
+            
+            if (!cardNumber) {
+                cardNumber = window.currentCardNumber || document.getElementById('binInput').value.trim().replace(/\D/g, '');
+            }
+            
+            // 添加Luhn校验结果
+            if (cardNumber) {
+                const isValid = validateCard(cardNumber);
+                const luhnStatus = isValid ? '✅ 通过' : '❌ 失败';
+                
+                const luhnItem = document.createElement('div');
+                luhnItem.className = 'result-item';
+                luhnItem.innerHTML = `
+                    <span class="result-label">Luhn校验</span>
+                    <span class="result-value" style="color: ${isValid ? '#34C759' : '#FF453A'};">
+                        ${luhnStatus}
+                    </span>
+                `;
+                resultGrid.appendChild(luhnItem);
+            }
+            
+            // 显示卡类型和发卡行名称
+            const fieldsToShow = [
+                { key: 'cardType', label: '卡类型' },
+                { key: 'issuerName', label: '发卡行名称' }
+            ];
+            
+            fieldsToShow.forEach(field => {
+                const value = data[field.key];
+                if (value !== undefined && value !== null && value !== '') {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'result-item';
+                    
+                    resultItem.innerHTML = `
+                        <span class="result-label">${field.label}</span>
+                        <span class="result-value">${value}</span>
+                    `;
+                    
+                    resultGrid.appendChild(resultItem);
+                }
+            });
+            
+            resultContainer.style.display = 'block';
+        }
+        
+        // 主要查询功能
+        async function queryBinInfo() {
+            const binInput = document.getElementById('binInput');
+            const bin = binInput.value.trim();
+            
+            if (!bin) {
+                showError('请输入银行识别码（BIN）');
+                return;
+            }
+            
+            const cleanBin = bin.replace(/\D/g, '');
+            
+            if (cleanBin.length < 6) {
+                showError('银行识别码至少需要6位数字');
+                return;
+            }
+            
+            window.currentCardNumber = cleanBin;
+            
+            const isValidLuhn = validateCard(cleanBin);
+            
+            if (isValidLuhn) {
+                showSuccess(`✅ Luhn校验通过\n正在查询银行信息...`);
+                setTimeout(() => {
+                    performBinQuery(cleanBin.substring(0, 6));
+                }, 1500);
+            } else {
+                showWarning(
+                    `❌ Luhn校验失败\n卡号不符合银行卡编码规则\n\n是否仍要继续查询BIN信息？`, 
+                    true, 
+                    () => {
+                        showSuccess('正在查询银行信息...');
+                        setTimeout(() => {
+                            performBinQuery(cleanBin.substring(0, 6));
+                        }, 1000);
+                    }
+                );
+            }
+        }
+        
+        async function performBinQuery(bin) {
+            const searchBtn = document.getElementById('searchBtn');
+            const loadingDiv = document.getElementById('loading');
+            
+            searchBtn.disabled = true;
+            loadingDiv.style.display = 'block';
+            
+            try {
+                const apiUrl = `${API_CONFIG.url}?bin=${bin}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'api-key': API_CONFIG.apiKey
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.code === "0000" && data.data) {
+                    const resultData = {
+                        cardType: data.data.cardType || data.data.cardProduct || '未知类型',
+                        issuerName: data.data.issuerName || '未知银行'
+                    };
+                    displayResult(resultData, window.currentCardNumber);
+                } else if (data.code === "0001") {
+                    const keyErrorData = {
+                        cardType: "认证失败",
+                        issuerName: data.msg || "API Key无效"
+                    };
+                    displayResult(keyErrorData, window.currentCardNumber);
+                } else if (data.code && data.msg) {
+                    const errorData = {
+                        cardType: "查询失败",
+                        issuerName: `${data.msg} (${data.code})`
+                    };
+                    displayResult(errorData, window.currentCardNumber);
+                } else {
+                    const unknownData = {
+                        cardType: "未知响应",
+                        issuerName: "API响应格式异常"
+                    };
+                    displayResult(unknownData, window.currentCardNumber);
+                }
+                
+            } catch (error) {
+                const errorData = {
+                    cardType: "网络错误",
+                    issuerName: "无法连接到服务器"
+                };
+                displayResult(errorData, window.currentCardNumber);
+            } finally {
+                searchBtn.disabled = false;
+                loadingDiv.style.display = 'none';
+            }
+        }
+        
+        // 确认/取消操作
+        function confirmContinue() {
+            if (window.pendingConfirmAction) {
+                window.pendingConfirmAction();
+                window.pendingConfirmAction = null;
+            }
+        }
+        
+        function cancelQuery() {
+            window.pendingConfirmAction = null;
+            hideAllMessages();
+            showSuccess('❌ 已取消查询');
+        }
+        
+        // API配置功能
+        function showApiConfig() {
+            hideAllMessages();
+            document.getElementById('apiConfig').style.display = 'block';
+            document.getElementById('newApiKey').value = API_CONFIG.apiKey;
+            document.getElementById('newApiKey').focus();
+        }
+        
+        function hideApiConfig() {
+            document.getElementById('apiConfig').style.display = 'none';
+        }
+        
+        function updateApiKey() {
+            const newApiKey = document.getElementById('newApiKey').value.trim();
+            
+            if (!newApiKey) {
+                showError('请输入API Key');
+                return;
+            }
+            
+            if (newApiKey.length < 10) {
+                showError('API Key长度太短，请检查是否完整');
+                return;
+            }
+            
+            API_CONFIG.apiKey = newApiKey;
+            hideApiConfig();
+            showSuccess(`✅ API Key已更新成功！`);
+        }
+    </script>
+</body>
+</html>
