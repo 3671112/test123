@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/bin-query.js": {
+      "maxDuration": 30
+    }
+  }
+}
