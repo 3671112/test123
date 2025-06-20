@@ -1,0 +1,22 @@
+{
+  "name": "bin-lookup-app",
+  "version": "1.0.0",
+  "description": "银行识别码查询工具",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'Static site, no build needed'",
+    "start": "vercel dev"
+  },
+  "keywords": [
+    "bin",
+    "bank",
+    "lookup",
+    "银行识别码"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
