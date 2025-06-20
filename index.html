@@ -298,6 +298,56 @@
             padding: 16px 20px;
             font-size: 16px;
         }
+        
+        .mode-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(0, 122, 255, 0.1);
+            border: 1px solid rgba(0, 122, 255, 0.3);
+            border-radius: 16px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #007AFF;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34C759;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .tips-section {
+            background: #f2f2f7;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 24px;
+            border: 2px solid #e5e5ea;
+        }
+        
+        .tips-section .tips-title {
+            color: #1d1d1f;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .tips-section .tips-content {
+            color: #1d1d1f;
+            font-size: 14px;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -307,25 +357,30 @@
             <p>输入BIN号码，快速查询银行信息</p>
         </div>
         
-            <div class="content">
+        <div class="content">
+            <div class="mode-indicator" id="modeIndicator">
+                <div class="status-dot"></div>
+                <span id="modeText">后端API模式：已启用</span>
+            </div>
+            
             <div class="input-section">
                 <label class="input-label" for="binInput">BIN号码</label>
                 <input type="text" id="binInput" class="input-field" placeholder="请输入6-19位银行卡号或BIN号码">
             </div>
             
-            <div style="background: #f2f2f7; border-radius: 16px; padding: 16px; margin-bottom: 24px; border: 2px solid #e5e5ea;">
-                <div style="color: #1d1d1f; font-size: 14px; line-height: 1.4;">
-                    <strong>💡 网络问题解决方案：</strong><br>
-                    • 如遇"网络错误"，请尝试开启代理模式<br>
-                    • 代理模式可解决CORS跨域访问问题<br>
-                    • 确保网络连接正常且API Key有效
+            <div class="tips-section">
+                <div class="tips-title">💡 查询模式说明：</div>
+                <div class="tips-content">
+                    • 优先使用后端API模式（无CORS限制）<br>
+                    • 如后端不可用，自动切换到前端代理模式<br>
+                    • 支持Luhn算法校验与银行信息查询
                 </div>
             </div>
             
             <div class="button-group">
                 <button class="btn btn-primary" id="searchBtn" onclick="queryBinInfo()">🔍 查询银行信息</button>
                 <button class="btn btn-secondary" onclick="showApiConfig()">⚙️ 配置API Key</button>
-                <button class="btn btn-secondary" onclick="toggleProxyMode()" id="proxyBtn" style="font-size: 14px; padding: 14px;">🌐 代理模式：开启</button>
+                <button class="btn btn-secondary" onclick="toggleMode()" id="modeBtn">🔄 切换查询模式</button>
             </div>
             
             <div class="loading" id="loading">正在查询中...</div>
@@ -354,30 +409,36 @@
     </div>
 
     <script>
-        // 全局变量
-        window.currentCardNumber = null;
-        
-        // API配置 - 支持不同的CORS代理服务
-        const API_CONFIG = {
-            // 主API: BinEagle 
-            primary: {
-                url: 'https://cors-anywhere.herokuapp.com/',  // 支持headers传递的代理
-                baseApiUrl: 'http://bineagle.com/check_bin',
-                apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a',
-                useProxy: true,
-                name: 'BinEagle'
+        // 全局配置
+        const APP_CONFIG = {
+            // 后端API配置
+            backend: {
+                enabled: true,
+                url: '/api/bin-query',
+                name: '后端API'
             },
             
-            // 备用代理服务
-            proxies: [
-                'https://cors-anywhere.herokuapp.com/',
-                'https://api.codetabs.com/v1/proxy?quest=',
-                'https://api.allorigins.win/raw?url='
-            ],
+            // 前端代理配置
+            frontend: {
+                enabled: true,
+                proxies: [
+                    'https://api.allorigins.win/raw?url=',
+                    'https://cors-anywhere.herokuapp.com/',
+                    'https://api.codetabs.com/v1/proxy?quest='
+                ],
+                currentProxyIndex: 0,
+                baseApiUrl: 'http://bineagle.com/check_bin',
+                name: '前端代理'
+            },
             
-            currentProxyIndex: 0,
-            currentApi: 'primary'
+            // API密钥
+            apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a',
+            
+            // 当前模式
+            currentMode: 'backend' // 'backend' 或 'frontend'
         };
+        
+        window.currentCardNumber = null;
         
         // Luhn算法校验
         function luhnChecksum(cardNumber) {
@@ -483,6 +544,17 @@
                 resultGrid.appendChild(luhnItem);
             }
             
+            // 显示查询模式
+            const modeItem = document.createElement('div');
+            modeItem.className = 'result-item';
+            modeItem.innerHTML = `
+                <span class="result-label">查询模式</span>
+                <span class="result-value">
+                    ${APP_CONFIG.currentMode === 'backend' ? '🖥️ 后端API' : '🌐 前端代理'}
+                </span>
+            `;
+            resultGrid.appendChild(modeItem);
+            
             // 显示卡类型和发卡行名称
             const fieldsToShow = [
                 { key: 'cardType', label: '卡类型' },
@@ -555,16 +627,23 @@
             loadingDiv.style.display = 'block';
             
             try {
-                // 先尝试主API
-                let result = await tryApiRequest(bin, 'primary');
+                let result = null;
                 
-                // 如果主API失败且是API Key问题，自动切换到备用API
-                if (!result && API_CONFIG.currentApi === 'primary') {
-                    showWarning('🔄 主API Key无效，正在切换到免费备用API...', false);
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                // 优先使用后端API
+                if (APP_CONFIG.currentMode === 'backend' && APP_CONFIG.backend.enabled) {
+                    result = await tryBackendApi(bin);
                     
-                    API_CONFIG.currentApi = 'fallback';
-                    result = await tryApiRequest(bin, 'fallback');
+                    // 如果后端失败，自动切换到前端代理
+                    if (!result) {
+                        showWarning('🔄 后端API不可用，自动切换到前端代理模式...', false);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        APP_CONFIG.currentMode = 'frontend';
+                        updateModeIndicator();
+                        result = await tryFrontendProxy(bin);
+                    }
+                } else {
+                    // 使用前端代理
+                    result = await tryFrontendProxy(bin);
                 }
                 
                 if (result) {
@@ -591,48 +670,73 @@
             }
         }
         
-        async function tryApiRequest(bin, apiType) {
+        // 后端API请求
+        async function tryBackendApi(bin) {
             try {
-                const config = API_CONFIG[apiType];
-                let apiUrl, requestOptions;
+                console.log('尝试后端API查询:', bin);
                 
-                if (config.useProxy) {
-                    // 尝试不同的代理服务
-                    const proxyUrl = API_CONFIG.proxies[API_CONFIG.currentProxyIndex];
-                    apiUrl = `${proxyUrl}${encodeURIComponent(config.baseApiUrl)}`;
-                    
-                    requestOptions = {
-                        method: 'POST',  // 改为POST请求
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'api-key': config.apiKey,
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: `bin=${bin}`  // 使用body传递参数
-                    };
-                } else {
-                    // 直接请求
-                    apiUrl = `${config.baseApiUrl}?bin=${bin}`;
-                    requestOptions = {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'api-key': config.apiKey
-                        }
-                    };
-                }
-                
-                console.log(`请求${config.name} API:`, apiUrl);
-                console.log('请求headers:', requestOptions.headers);
-                
-                const response = await fetch(apiUrl, requestOptions);
+                const response = await fetch(APP_CONFIG.backend.url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        bin: bin,
+                        apiKey: APP_CONFIG.apiKey
+                    })
+                });
                 
                 if (!response.ok) {
                     throw new Error(`HTTP错误: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                console.log(`${config.name} API返回:`, data);
+                console.log('后端API返回:', data);
+                
+                // 处理响应格式
+                if (data.code === "0000" && data.data) {
+                    return {
+                        cardType: data.data.cardType || data.data.cardProduct || '未知类型',
+                        issuerName: data.data.issuerName || '未知银行'
+                    };
+                } else {
+                    return {
+                        cardType: "查询失败", 
+                        issuerName: data.msg || data.message || "API返回错误"
+                    };
+                }
+                
+            } catch (error) {
+                console.error('后端API请求失败:', error);
+                return null;
+            }
+        }
+        
+        // 前端代理请求
+        async function tryFrontendProxy(bin) {
+            try {
+                const config = APP_CONFIG.frontend;
+                const proxyUrl = config.proxies[config.currentProxyIndex];
+                const apiUrl = `${proxyUrl}${encodeURIComponent(config.baseApiUrl)}`;
+                
+                console.log('尝试前端代理查询:', apiUrl);
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'api-key': APP_CONFIG.apiKey,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: `bin=${bin}`
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('前端代理返回:', data);
                 
                 // BinEagle API响应处理
                 if (data.code === "0000" && data.data) {
@@ -641,11 +745,11 @@
                         issuerName: data.data.issuerName || '未知银行'
                     };
                 } else if (data.code === "0001") {
-                    // API Key无效，尝试下一个代理
-                    if (API_CONFIG.currentProxyIndex < API_CONFIG.proxies.length - 1) {
-                        API_CONFIG.currentProxyIndex++;
+                    // 尝试下一个代理
+                    if (config.currentProxyIndex < config.proxies.length - 1) {
+                        config.currentProxyIndex++;
                         console.log('切换到下一个代理服务...');
-                        return await tryApiRequest(bin, apiType);
+                        return await tryFrontendProxy(bin);
                     }
                     return null;
                 } else {
@@ -656,17 +760,45 @@
                 }
                 
             } catch (error) {
-                console.error(`API请求失败:`, error);
+                console.error('前端代理请求失败:', error);
                 
                 // 尝试下一个代理
-                if (API_CONFIG.currentProxyIndex < API_CONFIG.proxies.length - 1) {
-                    API_CONFIG.currentProxyIndex++;
+                const config = APP_CONFIG.frontend;
+                if (config.currentProxyIndex < config.proxies.length - 1) {
+                    config.currentProxyIndex++;
                     console.log('代理失败，尝试下一个...');
-                    return await tryApiRequest(bin, apiType);
+                    return await tryFrontendProxy(bin);
                 }
                 
                 return null;
             }
+        }
+        
+        // 更新模式指示器
+        function updateModeIndicator() {
+            const modeText = document.getElementById('modeText');
+            const modeIndicator = document.getElementById('modeIndicator');
+            
+            if (APP_CONFIG.currentMode === 'backend') {
+                modeText.textContent = '后端API模式：已启用';
+                modeIndicator.style.background = 'rgba(52, 199, 89, 0.1)';
+                modeIndicator.style.borderColor = 'rgba(52, 199, 89, 0.3)';
+                modeIndicator.style.color = '#1d7324';
+            } else {
+                modeText.textContent = '前端代理模式：已启用';
+                modeIndicator.style.background = 'rgba(0, 122, 255, 0.1)';
+                modeIndicator.style.borderColor = 'rgba(0, 122, 255, 0.3)';
+                modeIndicator.style.color = '#007AFF';
+            }
+        }
+        
+        // 切换查询模式
+        function toggleMode() {
+            APP_CONFIG.currentMode = APP_CONFIG.currentMode === 'backend' ? 'frontend' : 'backend';
+            updateModeIndicator();
+            
+            const modeName = APP_CONFIG.currentMode === 'backend' ? '后端API模式' : '前端代理模式';
+            showSuccess(`✅ 已切换到${modeName}`);
         }
         
         // 确认/取消操作
@@ -686,46 +818,3 @@
         // API配置功能
         function showApiConfig() {
             hideAllMessages();
-            document.getElementById('apiConfig').style.display = 'block';
-            document.getElementById('newApiKey').value = API_CONFIG.apiKey;
-            document.getElementById('newApiKey').focus();
-        }
-        
-        function hideApiConfig() {
-            document.getElementById('apiConfig').style.display = 'none';
-        }
-        
-        function updateApiKey() {
-            const newApiKey = document.getElementById('newApiKey').value.trim();
-            
-            if (!newApiKey) {
-                showError('请输入API Key');
-                return;
-            }
-            
-            if (newApiKey.length < 10) {
-                showError('API Key长度太短，请检查是否完整');
-                return;
-            }
-            
-            API_CONFIG.apiKey = newApiKey;
-            hideApiConfig();
-            showSuccess(`✅ API Key已更新成功！`);
-        }
-        
-        // 切换代理模式
-        function toggleProxyMode() {
-            API_CONFIG.useProxy = !API_CONFIG.useProxy;
-            const proxyBtn = document.getElementById('proxyBtn');
-            
-            if (API_CONFIG.useProxy) {
-                proxyBtn.textContent = '🌐 代理模式：开启';
-                showSuccess('✅ 已开启代理模式\n通过第三方代理服务访问API，解决跨域问题');
-            } else {
-                proxyBtn.textContent = '🌐 代理模式：关闭';
-                showWarning('⚠️ 已关闭代理模式\n直接访问API，可能遇到CORS跨域限制');
-            }
-        }
-    </script>
-</body>
-</html>
