@@ -357,13 +357,26 @@
         // 全局变量
         window.currentCardNumber = null;
         
-        // API配置 - 使用CORS代理解决跨域问题
+        // API配置 - 支持不同的CORS代理服务
         const API_CONFIG = {
-            // 方法1: 使用allorigins代理
-            url: 'https://api.allorigins.win/get?url=',
-            baseApiUrl: 'http://bineagle.com/check_bin',
-            apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a',
-            useProxy: true
+            // 主API: BinEagle 
+            primary: {
+                url: 'https://cors-anywhere.herokuapp.com/',  // 支持headers传递的代理
+                baseApiUrl: 'http://bineagle.com/check_bin',
+                apiKey: 'bc19e0ab3df16705949405a8e9bc7d886088adb89a0a2f9b224a21a770fcd24a',
+                useProxy: true,
+                name: 'BinEagle'
+            },
+            
+            // 备用代理服务
+            proxies: [
+                'https://cors-anywhere.herokuapp.com/',
+                'https://api.codetabs.com/v1/proxy?quest=',
+                'https://api.allorigins.win/raw?url='
+            ],
+            
+            currentProxyIndex: 0,
+            currentApi: 'primary'
         };
         
         // Luhn算法校验
@@ -542,105 +555,117 @@
             loadingDiv.style.display = 'block';
             
             try {
-                let apiUrl, requestOptions;
+                // 先尝试主API
+                let result = await tryApiRequest(bin, 'primary');
                 
-                if (API_CONFIG.useProxy) {
-                    // 使用CORS代理方式 - 将API key作为URL参数传递
-                    const targetUrl = `${API_CONFIG.baseApiUrl}?bin=${bin}&api_key=${API_CONFIG.apiKey}`;
-                    apiUrl = `${API_CONFIG.url}${encodeURIComponent(targetUrl)}`;
+                // 如果主API失败且是API Key问题，自动切换到备用API
+                if (!result && API_CONFIG.currentApi === 'primary') {
+                    showWarning('🔄 主API Key无效，正在切换到免费备用API...', false);
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                     
-                    requestOptions = {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    };
+                    API_CONFIG.currentApi = 'fallback';
+                    result = await tryApiRequest(bin, 'fallback');
+                }
+                
+                if (result) {
+                    displayResult(result, window.currentCardNumber);
                 } else {
-                    // 直接请求方式 - 使用请求头传递API key
-                    apiUrl = `${API_CONFIG.baseApiUrl}?bin=${bin}`;
-                    requestOptions = {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'api-key': API_CONFIG.apiKey
-                        }
-                    };
-                }
-                
-                console.log('请求URL:', apiUrl);
-                
-                const response = await fetch(apiUrl, requestOptions);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
-                }
-                
-                let data;
-                if (API_CONFIG.useProxy) {
-                    // 代理返回的数据格式
-                    const proxyData = await response.json();
-                    if (proxyData.contents) {
-                        data = JSON.parse(proxyData.contents);
-                    } else {
-                        throw new Error('代理服务返回数据异常');
-                    }
-                } else {
-                    data = await response.json();
-                }
-                
-                console.log('API返回数据:', data);
-                
-                if (data.code === "0000" && data.data) {
-                    const resultData = {
-                        cardType: data.data.cardType || data.data.cardProduct || '未知类型',
-                        issuerName: data.data.issuerName || '未知银行'
-                    };
-                    displayResult(resultData, window.currentCardNumber);
-                } else if (data.code === "0001") {
-                    const keyErrorData = {
-                        cardType: "认证失败",
-                        issuerName: data.msg || "API Key无效"
-                    };
-                    displayResult(keyErrorData, window.currentCardNumber);
-                } else if (data.code && data.msg) {
                     const errorData = {
                         cardType: "查询失败",
-                        issuerName: `${data.msg} (${data.code})`
+                        issuerName: "所有API服务均不可用"
                     };
                     displayResult(errorData, window.currentCardNumber);
-                } else {
-                    const unknownData = {
-                        cardType: "未知响应",
-                        issuerName: "API响应格式异常"
-                    };
-                    displayResult(unknownData, window.currentCardNumber);
                 }
                 
             } catch (error) {
-                console.error('API请求失败:', error);
-                
-                // 如果代理失败，尝试切换到直接请求
-                if (API_CONFIG.useProxy && error.message.includes('代理')) {
-                    showWarning(
-                        `⚠️ 代理服务异常，是否尝试直接连接？\n\n注意：直接连接可能因CORS限制而失败`, 
-                        true, 
-                        () => {
-                            API_CONFIG.useProxy = false;
-                            performBinQuery(bin);
-                        }
-                    );
-                } else {
-                    const errorData = {
-                        cardType: "网络错误",
-                        issuerName: error.message.includes('CORS') ? 
-                            "跨域请求被阻止" : "无法连接到服务器"
-                    };
-                    displayResult(errorData, window.currentCardNumber);
-                }
+                console.error('查询过程出错:', error);
+                const errorData = {
+                    cardType: "网络错误",
+                    issuerName: error.message || "未知错误"
+                };
+                displayResult(errorData, window.currentCardNumber);
                 
             } finally {
                 searchBtn.disabled = false;
                 loadingDiv.style.display = 'none';
+            }
+        }
+        
+        async function tryApiRequest(bin, apiType) {
+            try {
+                const config = API_CONFIG[apiType];
+                let apiUrl, requestOptions;
+                
+                if (config.useProxy) {
+                    // 尝试不同的代理服务
+                    const proxyUrl = API_CONFIG.proxies[API_CONFIG.currentProxyIndex];
+                    apiUrl = `${proxyUrl}${encodeURIComponent(config.baseApiUrl)}`;
+                    
+                    requestOptions = {
+                        method: 'POST',  // 改为POST请求
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'api-key': config.apiKey,
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: `bin=${bin}`  // 使用body传递参数
+                    };
+                } else {
+                    // 直接请求
+                    apiUrl = `${config.baseApiUrl}?bin=${bin}`;
+                    requestOptions = {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'api-key': config.apiKey
+                        }
+                    };
+                }
+                
+                console.log(`请求${config.name} API:`, apiUrl);
+                console.log('请求headers:', requestOptions.headers);
+                
+                const response = await fetch(apiUrl, requestOptions);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log(`${config.name} API返回:`, data);
+                
+                // BinEagle API响应处理
+                if (data.code === "0000" && data.data) {
+                    return {
+                        cardType: data.data.cardType || data.data.cardProduct || '未知类型',
+                        issuerName: data.data.issuerName || '未知银行'
+                    };
+                } else if (data.code === "0001") {
+                    // API Key无效，尝试下一个代理
+                    if (API_CONFIG.currentProxyIndex < API_CONFIG.proxies.length - 1) {
+                        API_CONFIG.currentProxyIndex++;
+                        console.log('切换到下一个代理服务...');
+                        return await tryApiRequest(bin, apiType);
+                    }
+                    return null;
+                } else {
+                    return {
+                        cardType: "查询失败", 
+                        issuerName: data.msg || "未知错误"
+                    };
+                }
+                
+            } catch (error) {
+                console.error(`API请求失败:`, error);
+                
+                // 尝试下一个代理
+                if (API_CONFIG.currentProxyIndex < API_CONFIG.proxies.length - 1) {
+                    API_CONFIG.currentProxyIndex++;
+                    console.log('代理失败，尝试下一个...');
+                    return await tryApiRequest(bin, apiType);
+                }
+                
+                return null;
             }
         }
         
