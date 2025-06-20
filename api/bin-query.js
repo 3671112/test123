@@ -1,5 +1,5 @@
-// Vercel Serverless Function - api/bin-query.js
-// 这个文件放在项目根目录的 api/bin-query.js
+// api/bin-query.js
+// Vercel Serverless Function
 
 export default async function handler(req, res) {
     // 设置CORS头
@@ -34,7 +34,6 @@ export default async function handler(req, res) {
         }
 
         console.log('查询BIN:', bin);
-        console.log('使用API Key:', apiKey.substring(0, 10) + '...');
 
         // 调用BinEagle API
         const apiUrl = `http://bineagle.com/check_bin?bin=${bin}`;
